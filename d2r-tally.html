@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D2R Run Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold:#c8a85a; --gold-light:#e8c97a; --gold-dark:#8a6a2a;
+    --crimson:#8b1a1a; --crimson-light:#c02020;
+    --bg:#0a0804; --bg-card:#16120a;
+    --border:#2a2010; --border-gold:#3a2e14;
+    --text:#d4c49a; --text-dim:#7a6a4a; --text-muted:#4a3e28;
+    --rune-bg:#12100a; --rune-border:#2e2416;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; overflow:hidden; }
+  body {
+    font-family:'Crimson Text',Georgia,serif; font-size:14px;
+    background:var(--bg) radial-gradient(ellipse at 50% 0%,rgba(139,26,26,.08) 0%,transparent 60%);
+    color:var(--text);
+  }
+
+  /* SHELL — CSS grid, 5 rows, fills full viewport */
+  #shell {
+    position:fixed; inset:0;
+    display:grid;
+    grid-template-rows: auto auto auto 1fr auto;
+    row-gap:7px;
+    padding:10px 16px 8px;
+    max-width:1100px; margin:0 auto;
+    overflow:hidden;
+  }
+
+  /* HEADER */
+  .hdr { text-align:center; }
+  .hdr-skull { font-size:13px; opacity:.7; }
+  h1 { font-family:'Cinzel',serif; font-size:17px; font-weight:700; letter-spacing:4px; color:var(--gold); text-shadow:0 0 30px rgba(200,168,90,.3); margin:2px 0 1px; }
+  .hdr-sub  { font-family:'Cinzel',serif; font-size:8px; letter-spacing:3px; color:var(--text-dim); text-transform:uppercase; }
+  .hdr-line { height:1px; background:linear-gradient(90deg,transparent,var(--gold-dark),var(--gold),var(--gold-dark),transparent); margin:4px auto 0; max-width:500px; }
+
+  /* TIMER */
+  .timer { display:flex; align-items:center; justify-content:center; gap:14px; background:var(--bg-card); border:1px solid var(--border-gold); border-radius:5px; padding:6px 20px; position:relative; overflow:hidden; }
+  .timer::before { content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--gold-dark),transparent); }
+  .timer.running::before { background:linear-gradient(90deg,transparent,var(--crimson-light),transparent); animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+  .t-label   { font-family:'Cinzel',serif; font-size:8px; letter-spacing:2px; color:var(--text-muted); text-transform:uppercase; text-align:center; min-width:50px; }
+  .t-display { font-family:'Cinzel',serif; font-size:22px; font-weight:700; color:var(--text-dim); letter-spacing:3px; min-width:120px; text-align:center; transition:color .3s,text-shadow .3s; }
+  .timer.running .t-display { color:var(--gold-light); text-shadow:0 0 20px rgba(232,201,122,.35); }
+  .t-ctrl    { display:flex; gap:6px; }
+  .t-status  { font-size:9px; font-style:italic; color:var(--text-muted); text-align:center; min-width:50px; }
+  .timer.running .t-status { color:#7aaa40; }
+  .timer.paused  .t-status { color:#9a7a38; }
+  .btn-t { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1.5px; border-radius:3px; padding:5px 14px; cursor:pointer; border:none; text-transform:uppercase; transition:all .15s; }
+  .btn-t-start { background:#261a08; color:var(--gold-light); border:1px solid var(--gold-dark); }
+  .btn-t-start:hover { background:#32220a; border-color:var(--gold); color:#f0d888; }
+  .btn-t-pause { background:#1e1608; color:var(--text-dim); border:1px solid #4a3818; }
+  .btn-t-pause:hover { background:#2a1e0a; border-color:var(--gold-dark); color:var(--gold); }
+  .btn-t-stop  { background:#1c0a0a; color:#b05050; border:1px solid #3e1818; padding:5px 10px; }
+  .btn-t-stop:hover  { background:#2a1010; color:#d06060; border-color:#6a2424; }
+
+  /* TABS */
+  .tabs { display:flex; border-bottom:1px solid var(--border-gold); }
+  .tab-btn { font-family:'Cinzel',serif; font-size:9px; letter-spacing:2px; text-transform:uppercase; padding:6px 22px; cursor:pointer; background:transparent; color:var(--text-muted); border:1px solid transparent; border-bottom:none; border-radius:4px 4px 0 0; transition:all .15s; position:relative; bottom:-1px; }
+  .tab-btn:hover  { color:var(--text-dim); background:#161208; }
+  .tab-btn.active { color:var(--gold); border-color:var(--border-gold); background:var(--bg-card); border-bottom-color:var(--bg-card); }
+
+  /* PANELS */
+  #panels { display:grid; overflow:hidden; }
+  .panel { display:none; grid-area:1/1; flex-direction:column; padding-top:7px; overflow:hidden; }
+  .panel.active { display:flex; }
+  .p-fixed  { flex:none; }
+  .p-scroll { flex:1; min-height:0; overflow-y:auto; margin-top:6px; }
+  .p-scroll::-webkit-scrollbar { width:4px; }
+  .p-scroll::-webkit-scrollbar-thumb { background:var(--border-gold); border-radius:2px; }
+
+  /* FOOTER */
+  .footer { display:flex; align-items:center; justify-content:center; gap:12px; flex-wrap:wrap; padding-top:5px; border-top:1px solid var(--border); }
+  .btn-rst { font-family:'Cinzel',serif; font-size:9px; letter-spacing:2px; padding:5px 16px; background:#221010; color:#b05050; border:1px solid #4a2020; border-radius:3px; cursor:pointer; transition:all .15s; text-transform:uppercase; }
+  .btn-rst:hover { color:#e06060; border-color:#803030; background:#2e1414; }
+  .btn-rst-full { color:#9a60b8; border-color:#4a2060; background:#1a0f24; }
+  .btn-rst-full:hover { color:#c080e0; border-color:#7a30b0; background:#261430; }
+  .warn-txt { font-size:10px; color:var(--text-muted); font-style:italic; }
+  .btn-export { color:#50a0b8; border-color:#1e4a5a; background:#0a1e28; }
+  .btn-export:hover { color:#70c8e0; border-color:#2a6a80; background:#102838; }
+  .btn-import { color:#70a850; border-color:#2a4a1e; background:#101e0a; }
+  .btn-import:hover { color:#90d060; border-color:#3a6a28; background:#182e10; }
+
+  /* SECTION TITLE */
+  .sec { font-family:'Cinzel',serif; font-size:9px; letter-spacing:3px; color:#9a7a38; text-transform:uppercase; display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .sec::before,.sec::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,transparent,var(--border-gold)); }
+  .sec::after { background:linear-gradient(90deg,var(--border-gold),transparent); }
+
+  /* BOSS CARDS */
+  .bosses { display:grid; gap:8px; margin-bottom:7px; }
+  .b4 { grid-template-columns:repeat(4,1fr); }
+  .b5 { grid-template-columns:repeat(5,1fr); }
+  .boss { background:var(--bg-card); border:1px solid var(--border-gold); border-radius:5px; padding:8px 10px 7px; text-align:center; position:relative; overflow:hidden; }
+  .boss::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,var(--crimson),transparent); }
+  .boss.herald::before { background:linear-gradient(90deg,transparent,#3a8a7a,transparent); }
+  .boss.herald .b-name  { color:#6ac8b8; }
+  .boss.herald .b-count { color:#8ee8d0; text-shadow:0 0 20px rgba(100,220,190,.35); }
+  .b-name  { font-family:'Cinzel',serif; font-size:9px; letter-spacing:2px; color:var(--gold); text-transform:uppercase; margin-bottom:1px; }
+  .b-label { font-size:10px; color:var(--text-dim); margin-bottom:4px; font-style:italic; }
+  .b-count { font-family:'Cinzel',serif; font-size:24px; font-weight:700; color:var(--gold-light); text-shadow:0 0 20px rgba(232,201,122,.4); line-height:1; margin-bottom:5px; }
+  .b-btns  { display:flex; gap:5px; justify-content:center; }
+  .btn-add,.btn-rs { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px; border:none; cursor:pointer; border-radius:3px; padding:4px 10px; transition:all .15s; }
+  .btn-add { background:#261a08; color:#d4aa50; border:1px solid #6a4e1e; }
+  .btn-add:hover { background:#32220a; border-color:var(--gold); color:var(--gold-light); }
+  .btn-rs  { background:#221010; color:#b05858; border:1px solid #4a1e1e; font-size:8px; }
+  .btn-rs:hover  { background:#2e1414; color:#e07070; border-color:#803030; }
+
+  /* KEYS */
+  .keys { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:7px; }
+  .key  { background:var(--bg-card); border:1px solid var(--border-gold); border-radius:4px; padding:7px 8px; text-align:center; }
+  .k-icon { font-size:13px; margin-bottom:1px; opacity:.85; }
+  .k-name { font-family:'Cinzel',serif; font-size:8px; letter-spacing:1.5px; margin-bottom:1px; color:var(--gold); }
+  .k-src  { font-size:10px; color:var(--text-dim); font-style:italic; margin-bottom:4px; }
+  .k-cnt  { font-family:'Cinzel',serif; font-size:20px; font-weight:700; line-height:1; margin-bottom:5px; }
+  .tbtns  { display:flex; gap:4px; justify-content:center; }
+  .btn-tl { font-family:'Cinzel',serif; font-size:9px; letter-spacing:1px; border:none; cursor:pointer; border-radius:3px; padding:3px 8px; background:#261a08; color:#d4aa50; border:1px solid #6a4e1e; transition:all .12s; }
+  .btn-tl:hover { background:#32220a; border-color:var(--gold); color:var(--gold-light); }
+  .btn-tl.minus { background:#221010; color:#b06060; border-color:#4a1e1e; font-size:12px; padding:1px 6px; }
+  .btn-tl.minus:hover { background:#2e1414; color:#e07878; border-color:#803030; }
+
+  /* RUNES */
+  .runes { display:grid; grid-template-columns:repeat(11,1fr); gap:5px; margin-bottom:7px; }
+  .rune  { background:var(--rune-bg); border:1px solid var(--rune-border); border-radius:3px; padding:4px 3px 3px; text-align:center; cursor:pointer; transition:all .12s; position:relative; user-select:none; }
+  .rune:hover { border-color:var(--gold-dark); background:#1a1610; }
+  .rune:active { transform:scale(.96); }
+  .rune.hit { border-color:var(--gold-dark); }
+  .r-num  { font-family:'Cinzel',serif; font-size:7px; color:var(--text-muted); letter-spacing:.5px; }
+  .r-name { font-family:'Cinzel',serif; font-size:10px; font-weight:600; color:#b89a50; }
+  .rune.hr .r-name { color:#a0c0e8; }
+  .r-cnt  { font-family:'Cinzel',serif; font-size:14px; font-weight:700; color:#5a4a28; line-height:1; }
+  .rune.hit .r-cnt    { color:#f0d888; text-shadow:0 0 10px rgba(240,216,136,.4); }
+  .rune.hr.hit .r-cnt { color:#90c8f0; text-shadow:0 0 10px rgba(144,200,240,.4); }
+  .r-minus { position:absolute; top:1px; right:2px; font-size:9px; color:var(--text-muted); cursor:pointer; padding:1px 2px; opacity:0; transition:opacity .1s; }
+  .rune:hover .r-minus { opacity:1; }
+  .r-minus:hover { color:#c06060; }
+
+  /* GG */
+  .gg-row  { display:flex; gap:8px; margin-bottom:6px; }
+  .gg-in   { flex:1; font-family:'Crimson Text',Georgia,serif; font-size:13px; background:#0e0c08; border:1px solid var(--border-gold); border-radius:4px; padding:5px 10px; color:var(--text); outline:none; transition:border-color .15s; }
+  .gg-in::placeholder { color:var(--text-muted); font-style:italic; }
+  .gg-in:focus { border-color:var(--gold-dark); }
+  .btn-gg  { font-family:'Cinzel',serif; font-size:8px; letter-spacing:1.5px; padding:5px 14px; background:#1e2a10; color:#9acc58; border:1px solid #3a5a1a; border-radius:4px; cursor:pointer; transition:all .15s; text-transform:uppercase; flex-shrink:0; }
+  .btn-gg:hover { background:#2a3e18; color:#c0e870; border-color:#5a8030; }
+  .gg-empty { font-style:italic; color:var(--text-muted); text-align:center; padding:24px 0; font-size:13px; }
+  .gg-item { display:flex; align-items:center; gap:10px; background:var(--bg-card); border:1px solid var(--border-gold); border-radius:4px; padding:7px 10px; position:relative; margin-bottom:4px; }
+  .gg-item::before { content:''; position:absolute; left:0; top:0; bottom:0; width:2px; background:linear-gradient(180deg,var(--gold-dark),transparent); border-radius:4px 0 0 4px; }
+  .gg-num  { font-family:'Cinzel',serif; font-size:9px; color:var(--text-muted); min-width:22px; }
+  .gg-text { flex:1; color:var(--gold-light); font-size:14px; }
+  .gg-time { font-family:'Cinzel',serif; font-size:8px; color:var(--text-muted); letter-spacing:1px; flex-shrink:0; }
+  .gg-del  { font-size:11px; color:var(--text-muted); cursor:pointer; padding:2px 5px; transition:color .1s; }
+  .gg-del:hover { color:#c06060; }
+
+
+  /* ============================================================
+     MOBILE  (≤ 600px)
+     ============================================================ */
+  @media (max-width:600px) {
+
+    /* Shell — slightly tighter padding */
+    #shell { padding:8px 10px 6px; row-gap:5px; }
+
+    /* Header — smaller title */
+    h1 { font-size:13px; letter-spacing:2px; }
+    .hdr-sub { font-size:7px; letter-spacing:2px; }
+    .hdr-skull { font-size:11px; }
+
+    /* Timer — stack into two rows */
+    .timer { flex-wrap:wrap; gap:6px 10px; padding:6px 12px; }
+    .t-label { display:none; }
+    .t-display { font-size:18px; min-width:100px; }
+    .t-status { min-width:40px; font-size:8px; }
+    .btn-t { font-size:8px; padding:5px 10px; }
+
+    /* Tabs — shrink text, fill width evenly */
+    .tab-btn { font-size:7px; letter-spacing:1px; padding:5px 0; flex:1; text-align:center; }
+
+    /* Boss cards — 2 columns on mobile */
+    .b4 { grid-template-columns:repeat(2,1fr); }
+    .b5 { grid-template-columns:repeat(3,1fr); }
+    .b-count { font-size:20px; }
+    .b-label { font-size:9px; }
+    .b-name  { font-size:8px; letter-spacing:1px; }
+    .btn-add { padding:4px 8px; font-size:8px; }
+    .btn-rs  { padding:3px 6px; font-size:7px; }
+
+    /* Keys — stack to 1 column */
+    .keys { grid-template-columns:1fr; }
+    .key  { display:flex; align-items:center; gap:10px; padding:6px 10px; text-align:left; }
+    .k-icon { font-size:16px; margin-bottom:0; flex-shrink:0; }
+    .k-name { font-size:9px; margin-bottom:0; }
+    .k-src  { font-size:9px; margin-bottom:0; }
+    .k-cnt  { font-size:22px; margin-bottom:0; min-width:36px; text-align:right; }
+    .tbtns  { margin-left:auto; }
+
+    /* Runes — 6 columns (still tight but usable) */
+    .runes { grid-template-columns:repeat(6,1fr); gap:4px; }
+    .r-num  { font-size:6px; }
+    .r-name { font-size:9px; }
+    .r-cnt  { font-size:12px; }
+    .r-minus { font-size:8px; opacity:1; } /* always visible on touch */
+
+    /* GG input */
+    .gg-in  { font-size:12px; padding:5px 8px; }
+    .btn-gg { font-size:7px; padding:5px 10px; }
+    .gg-text { font-size:13px; }
+
+    /* Footer — stack buttons */
+    .footer { flex-direction:column; gap:6px; }
+    .btn-rst { font-size:8px; padding:6px 14px; width:100%; text-align:center; }
+  }
+
+
+  @media (max-width:600px) {
+    html, body { height:auto; overflow:auto; }
+    #shell {
+      position:static;
+      display:block;
+      overflow:visible;
+      height:auto;
+      min-height:100vh;
+    }
+    #panels { display:block; overflow:visible; height:auto; }
+    .panel { display:none; position:static; overflow:visible; height:auto; }
+    .panel.active { display:block; }
+    .p-fixed { height:auto; }
+    .p-scroll { height:auto; overflow:visible; flex:none; }
+  }
+
+
+  /* COLLAPSIBLE SECTIONS */
+  .sec { cursor:pointer; user-select:none; }
+  .sec-toggle { appearance:none; width:10px; height:10px; border:1px solid var(--gold-dark); border-radius:2px; background:transparent; cursor:pointer; position:relative; flex-shrink:0; margin-left:4px; transition:background .15s; }
+  .sec-toggle:checked { background:var(--gold-dark); }
+  .sec-toggle:checked::after { content:''; position:absolute; inset:2px; background:var(--gold); border-radius:1px; }
+  .sec-body { overflow:hidden; transition:max-height .25s ease, opacity .25s ease; max-height:2000px; margin-bottom:7px; }
+  .sec-body.collapsed { max-height:0; opacity:0; margin-bottom:0; }
+  .sec-arrow { font-size:8px; color:var(--gold-dark); margin-left:2px; transition:transform .2s; display:inline-block; }
+  .sec.collapsed-hdr .sec-arrow { transform:rotate(-90deg); }
+
+  @keyframes flash-gold { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .flash { animation:flash-gold .25s ease; }
+</style>
+</head>
+<body>
+<div id="shell">
+
+  <div class="hdr">
+    <div class="hdr-skull">☠</div>
+    <h1>TERROR'S END</h1>
+    <div class="hdr-sub">Diablo II Resurrected — Run Tracker</div>
+    <div class="hdr-line"></div>
+  </div>
+
+  <div class="timer" id="timer-wrap">
+    <div class="t-label">Session<br>Time</div>
+    <div class="t-display" id="timer-display">00:00:00</div>
+    <div class="t-ctrl" id="timer-controls"></div>
+    <div class="t-status" id="timer-status">Stopped</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('key-runs')">⚿ Key &amp; Herald Runs</button>
+    <button class="tab-btn" onclick="switchTab('boss-runs')">☠ Boss Runs</button>
+    <button class="tab-btn" onclick="switchTab('gg-finds')">✦ GG Finds</button>
+  </div>
+
+  <div id="panels">
+
+    <div class="panel active" id="tab-key-runs">
+      <div class="p-fixed">
+        <div class="sec" onclick="toggleSec('sec-key-bosses')"><span class="sec-arrow" id="arr-sec-key-bosses">&#9660;</span>Key Farming Bosses</div>
+<div class="sec-body" id="sec-key-bosses">
+        <div class="bosses b4" id="key-bosses"></div>
+</div>
+        <div class="sec" onclick="toggleSec('sec-keys')"><span class="sec-arrow" id="arr-sec-keys">&#9660;</span>Keys of Evil</div>
+<div class="sec-body" id="sec-keys">
+        <div class="keys" id="keys"></div>
+</div>
+        <div class="sec" onclick="toggleSec('sec-runes')"><span class="sec-arrow" id="arr-sec-runes">&#9660;</span>Rune Tally</div>
+<div class="sec-body" id="sec-runes">
+        <div class="runes" id="runes"></div>
+</div>
+        <div class="sec" onclick="toggleSec('sec-gg-keys')"><span class="sec-arrow" id="arr-sec-gg-keys">&#9660;</span>GG Finds</div>
+        <div class="sec-body" id="sec-gg-keys">
+        <div class="gg-row">
+          <input class="gg-in" id="gg-input-keys" type="text" placeholder="Log a GG find from this run..." maxlength="120" onkeydown="if(event.key==='Enter')addGGFindFrom('keys')">
+          <button class="btn-gg" onclick="addGGFindFrom('keys')">+ Log</button>
+        </div>
+      </div>
+      </div>
+      <div class="p-scroll" id="gg-list-inline-keys"></div>
+    </div>
+
+    <div class="panel" id="tab-boss-runs">
+      <div class="p-fixed">
+        <div class="sec" onclick="toggleSec('sec-act-bosses')"><span class="sec-arrow" id="arr-sec-act-bosses">&#9660;</span>Act Bosses</div>
+<div class="sec-body" id="sec-act-bosses">
+        <div class="bosses b5" id="act-bosses"></div>
+</div>
+        <div class="sec" onclick="toggleSec('sec-runes2')"><span class="sec-arrow" id="arr-sec-runes2">&#9660;</span>Rune Tally</div>
+<div class="sec-body" id="sec-runes2">
+        <div class="runes" id="runes2"></div>
+</div>
+        <div class="sec" onclick="toggleSec('sec-gg-bosses')"><span class="sec-arrow" id="arr-sec-gg-bosses">&#9660;</span>GG Finds</div>
+        <div class="sec-body" id="sec-gg-bosses">
+        <div class="gg-row">
+          <input class="gg-in" id="gg-input-bosses" type="text" placeholder="Log a GG find from this run..." maxlength="120" onkeydown="if(event.key==='Enter')addGGFindFrom('bosses')">
+          <button class="btn-gg" onclick="addGGFindFrom('bosses')">+ Log</button>
+        </div>
+      </div>
+      </div>
+      <div class="p-scroll" id="gg-list-inline-bosses"></div>
+    </div>
+
+    <div class="panel" id="tab-gg-finds">
+      <div class="p-fixed">
+        <div class="sec" onclick="toggleSec('sec-gg-full')"><span class="sec-arrow" id="arr-sec-gg-full">&#9660;</span>GG Finds</div>
+        <div class="sec-body" id="sec-gg-full">
+        <div class="gg-row">
+          <input class="gg-in" id="gg-input" type="text" placeholder="e.g. Griffon's Eye, Zod Rune, Tyrael's Might..." maxlength="120" onkeydown="if(event.key==='Enter')addGGFind()">
+          <button class="btn-gg" onclick="addGGFind()">+ Log Find</button>
+        </div>
+      </div>
+      </div>
+      <div class="p-scroll" id="gg-list"></div>
+    </div>
+
+  </div>
+
+  <div class="footer">
+    <button class="btn-rst" onclick="globalReset()">⚔ Reset All Tallies</button>
+    <button class="btn-rst btn-rst-full" onclick="fullReset()">☠ Reset Everything + Timer</button>
+    <button class="btn-rst btn-export" onclick="exportData()">⬇ Export</button>
+    <div id="export-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#16120a;border:1px solid #3a2e14;border-radius:6px;padding:16px;max-width:600px;width:100%;display:flex;flex-direction:column;gap:10px;">
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#c8a85a;">EXPORT DATA — Copy the text below</div>
+        <textarea id="export-text" style="background:#0a0804;border:1px solid #3a2e14;border-radius:4px;color:#d4c49a;font-family:monospace;font-size:11px;padding:10px;height:260px;resize:none;outline:none;" readonly></textarea>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-rst btn-export" onclick="copyExport()" style="flex:1;">⧉ Copy to Clipboard</button>
+          <button class="btn-rst" onclick="document.getElementById('export-modal').style.display='none'" style="flex:1;">✕ Close</button>
+        </div>
+        <div id="copy-msg" style="font-size:10px;color:#70a850;font-style:italic;text-align:center;min-height:14px;"></div>
+      </div>
+    </div>
+    <button class="btn-rst btn-import" onclick="openImportModal()">⬆ Import</button>
+    <div id="import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;padding:20px;">
+      <div style="background:#16120a;border:1px solid #3a2e14;border-radius:6px;padding:16px;max-width:600px;width:100%;display:flex;flex-direction:column;gap:10px;">
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#c8a85a;">IMPORT DATA — Paste exported JSON below</div>
+        <textarea id="import-text" style="background:#0a0804;border:1px solid #3a2e14;border-radius:4px;color:#d4c49a;font-family:monospace;font-size:11px;padding:10px;height:260px;resize:none;outline:none;" placeholder="Paste your exported JSON here..."></textarea>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-rst btn-import" onclick="importFromText()" style="flex:1;">⬆ Load Data</button>
+          <button class="btn-rst" onclick="document.getElementById('import-modal').style.display='none'" style="flex:1;">✕ Close</button>
+        </div>
+        <div id="import-msg" style="font-size:10px;font-style:italic;text-align:center;min-height:14px;"></div>
+      </div>
+    </div>
+    <div class="warn-txt" id="reset-confirm-msg"></div>
+  </div>
+
+</div>
+<script>
+const KEY_BOSSES = [
+  { id:'countess',  name:'Countess',  label:'Act I · Tower Lvl 5',      herald:false },
+  { id:'summoner',  name:'Summoner',  label:'Act II · Arcane Sanctuary', herald:false },
+  { id:'nihlathak', name:'Nihlathak', label:'Act V · Halls of Vaught',   herald:false },
+  { id:'herald',    name:'Herald',    label:'Terror Zone Hunter',        herald:true  },
+];
+const ACT_BOSSES = [
+  { id:'andariel', name:'Andariel', label:"Act I · Catacombs Lvl 4" },
+  { id:'duriel',   name:'Duriel',   label:"Act II · Tal Rasha's Tomb" },
+  { id:'mephisto', name:'Mephisto', label:'Act III · Durance of Hate' },
+  { id:'diablo',   name:'Diablo',   label:'Act IV · Chaos Sanctuary' },
+  { id:'baal',     name:'Baal',     label:'Act V · Throne of Destruction' },
+];
+const KEYS = [
+  { id:'terror',      name:'Key of Terror',     source:'Countess',  col:'#c89040' },
+  { id:'hate',        name:'Key of Hatred',      source:'Summoner',  col:'#c84040' },
+  { id:'destruction', name:'Key of Destruction', source:'Nihlathak', col:'#8040c8' },
+];
+const RUNES = [
+  {id:'el',n:'El',num:1,hr:false},{id:'eld',n:'Eld',num:2,hr:false},
+  {id:'tir',n:'Tir',num:3,hr:false},{id:'nef',n:'Nef',num:4,hr:false},
+  {id:'eth',n:'Eth',num:5,hr:false},{id:'ith',n:'Ith',num:6,hr:false},
+  {id:'tal',n:'Tal',num:7,hr:false},{id:'ral',n:'Ral',num:8,hr:false},
+  {id:'ort',n:'Ort',num:9,hr:false},{id:'thul',n:'Thul',num:10,hr:false},
+  {id:'amn',n:'Amn',num:11,hr:false},{id:'sol',n:'Sol',num:12,hr:false},
+  {id:'shael',n:'Shael',num:13,hr:false},{id:'dol',n:'Dol',num:14,hr:false},
+  {id:'hel',n:'Hel',num:15,hr:false},{id:'io',n:'Io',num:16,hr:false},
+  {id:'lum',n:'Lum',num:17,hr:false},{id:'ko',n:'Ko',num:18,hr:false},
+  {id:'fal',n:'Fal',num:19,hr:false},{id:'lem',n:'Lem',num:20,hr:false},
+  {id:'pul',n:'Pul',num:21,hr:false},{id:'um',n:'Um',num:22,hr:false},
+  {id:'mal',n:'Mal',num:23,hr:false},{id:'ist',n:'Ist',num:24,hr:false},
+  {id:'gul',n:'Gul',num:25,hr:false},{id:'vex',n:'Vex',num:26,hr:false},
+  {id:'ohm',n:'Ohm',num:27,hr:true},{id:'lo',n:'Lo',num:28,hr:true},
+  {id:'sur',n:'Sur',num:29,hr:true},{id:'ber',n:'Ber',num:30,hr:true},
+  {id:'jah',n:'Jah',num:31,hr:true},{id:'cham',n:'Cham',num:32,hr:true},
+  {id:'zod',n:'Zod',num:33,hr:true},
+];
+
+let state = loadState();
+function loadState() {
+  try { const s=localStorage.getItem('d2r_tally_v2'); if(s) return JSON.parse(s); } catch(e){}
+  return {
+    keyBosses: Object.fromEntries(KEY_BOSSES.map(b=>[b.id,0])),
+    actBosses: Object.fromEntries(ACT_BOSSES.map(b=>[b.id,0])),
+    keys:      Object.fromEntries(KEYS.map(k=>[k.id,0])),
+    runes:     Object.fromEntries(RUNES.map(r=>[r.id,0])),
+    ggFinds:   [],
+  };
+}
+function saveState() { try{localStorage.setItem('d2r_tally_v2',JSON.stringify(state));}catch(e){} }
+
+function switchTab(id) {
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>
+    b.classList.toggle('active',['key-runs','boss-runs','gg-finds'][i]===id));
+  document.querySelectorAll('.panel').forEach(p=>
+    p.classList.toggle('active',p.id==='tab-'+id));
+}
+
+function addKeyBoss(id)   { state.keyBosses[id]=(state.keyBosses[id]||0)+1; saveState(); renderKeyBosses(); }
+function resetKeyBoss(id) { state.keyBosses[id]=0; saveState(); renderKeyBosses(); }
+function renderKeyBosses() {
+  document.getElementById('key-bosses').innerHTML = KEY_BOSSES.map(b=>{
+    const c=state.keyBosses[b.id]||0;
+    return `<div class="boss${b.herald?' herald':''}">
+      <div class="b-name">${b.name}</div>
+      <div class="b-label">${b.label}</div>
+      <div class="b-count">${c}</div>
+      <div class="b-btns">
+        <button class="btn-add" onclick="addKeyBoss('${b.id}')">+ Run</button>
+        <button class="btn-rs" onclick="resetKeyBoss('${b.id}')">Reset</button>
+      </div></div>`;
+  }).join('');
+}
+
+function addActBoss(id)   { state.actBosses[id]=(state.actBosses[id]||0)+1; saveState(); renderActBosses(); }
+function resetActBoss(id) { state.actBosses[id]=0; saveState(); renderActBosses(); }
+function renderActBosses() {
+  document.getElementById('act-bosses').innerHTML = ACT_BOSSES.map(b=>{
+    const c=state.actBosses[b.id]||0;
+    return `<div class="boss">
+      <div class="b-name">${b.name}</div>
+      <div class="b-label">${b.label}</div>
+      <div class="b-count">${c}</div>
+      <div class="b-btns">
+        <button class="btn-add" onclick="addActBoss('${b.id}')">+ Run</button>
+        <button class="btn-rs" onclick="resetActBoss('${b.id}')">Reset</button>
+      </div></div>`;
+  }).join('');
+}
+
+function addKey(id)    { state.keys[id]=(state.keys[id]||0)+1; saveState(); renderKeys(); }
+function removeKey(id) { state.keys[id]=Math.max(0,(state.keys[id]||0)-1); saveState(); renderKeys(); }
+function renderKeys() {
+  document.getElementById('keys').innerHTML = KEYS.map(k=>{
+    const c=state.keys[k.id]||0;
+    return `<div class="key">
+      <div class="k-icon" style="color:${k.col}">⚿</div>
+      <div class="k-name" style="color:${k.col}">${k.name}</div>
+      <div class="k-src">Drops from ${k.source}</div>
+      <div class="k-cnt" style="color:${k.col};text-shadow:0 0 14px ${k.col}55">${c}</div>
+      <div class="tbtns">
+        <button class="btn-tl minus" onclick="removeKey('${k.id}')">−</button>
+        <button class="btn-tl" onclick="addKey('${k.id}')">+ Add</button>
+      </div></div>`;
+  }).join('');
+}
+
+function addRune(id) {
+  state.runes[id]=(state.runes[id]||0)+1; saveState(); renderRunes();
+  ['rune-'+id,'rune2-'+id].forEach(eid=>{
+    const el=document.getElementById(eid);
+    if(el){el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');}
+  });
+}
+function removeRune(id,e) { e&&e.stopPropagation(); state.runes[id]=Math.max(0,(state.runes[id]||0)-1); saveState(); renderRunes(); }
+function runeCard(r,pfx) {
+  const c=state.runes[r.id]||0;
+  return `<div class="rune${r.hr?' hr':''}${c>0?' hit':''}" id="${pfx}-${r.id}" onclick="addRune('${r.id}')">
+    <span class="r-minus" onclick="removeRune('${r.id}',event)">−</span>
+    <div class="r-num">r${String(r.num).padStart(2,'0')}</div>
+    <div class="r-name">${r.n}</div>
+    <div class="r-cnt">${c}</div></div>`;
+}
+function renderRunes() {
+  document.getElementById('runes').innerHTML  = RUNES.map(r=>runeCard(r,'rune')).join('');
+  document.getElementById('runes2').innerHTML = RUNES.map(r=>runeCard(r,'rune2')).join('');
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function ggItemHtml(f,i,total) {
+  return `<div class="gg-item">
+    <span class="gg-num">#${total-i}</span>
+    <span class="gg-text">${escHtml(f.text)}</span>
+    <span class="gg-time">${f.time}</span>
+    <span class="gg-del" onclick="deleteGGFind(${i})" title="Remove">✕</span>
+  </div>`;
+}
+function renderGGFinds() {
+  const empty = '<div class="gg-empty">No GG finds logged yet — go get some loot.</div>';
+  const all   = state.ggFinds.map((f,i)=>ggItemHtml(f,i,state.ggFinds.length)).join('');
+  const el = document.getElementById('gg-list');
+  if(el) el.innerHTML = state.ggFinds.length ? all : empty;
+  ['gg-list-inline-keys','gg-list-inline-bosses'].forEach(id=>{
+    const el2=document.getElementById(id);
+    if(el2) el2.innerHTML = state.ggFinds.length ? all : empty;
+  });
+  setTimeout(()=>document.querySelectorAll('.p-scroll').forEach(el=>el.scrollTop=el.scrollHeight),0);
+}
+function addGGFindFrom(src) {
+  const id = src==='keys' ? 'gg-input-keys' : 'gg-input-bosses';
+  const inp=document.getElementById(id), val=inp.value.trim(); if(!val) return;
+  state.ggFinds.push({text:val, time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})});
+  saveState(); renderGGFinds(); inp.value=''; inp.focus();
+}
+function addGGFind() {
+  const inp=document.getElementById('gg-input'), val=inp.value.trim(); if(!val) return;
+  state.ggFinds.push({text:val, time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})});
+  saveState(); renderGGFinds(); inp.value=''; inp.focus();
+}
+function deleteGGFind(i) { state.ggFinds.splice(i,1); saveState(); renderGGFinds(); }
+
+let resetPending=null;
+function showConfirm(type) {
+  clearTimeout(resetPending);
+  const msg=document.getElementById('reset-confirm-msg');
+  const label=type==='full'?'Reset everything + timer?':'Reset all tallies?';
+  msg.innerHTML=`<span style="color:#c06040">${label} <b style="cursor:pointer;color:#e08060" onclick="doReset('${type}')">Confirm</b> · <span style="cursor:pointer;color:#6a5040" onclick="cancelReset()">Cancel</span></span>`;
+  resetPending=setTimeout(cancelReset,4000);
+}
+function cancelReset() { clearTimeout(resetPending); const m=document.getElementById('reset-confirm-msg'); if(m) m.innerHTML=''; }
+function doReset(type) {
+  clearTimeout(resetPending);
+  KEY_BOSSES.forEach(b=>state.keyBosses[b.id]=0);
+  ACT_BOSSES.forEach(b=>state.actBosses[b.id]=0);
+  KEYS.forEach(k=>state.keys[k.id]=0);
+  RUNES.forEach(r=>state.runes[r.id]=0);
+  if(type==='full'){state.ggFinds=[];timerStop();}
+  saveState(); renderAll(); cancelReset();
+}
+function globalReset(){ showConfirm('tallies'); }
+function fullReset()  { showConfirm('full'); }
+
+let timerState='stopped',timerElapsed=0,timerStart=null,timerInterval=null;
+function timerTick(){ updateTimerDisplay(timerElapsed+Math.floor((Date.now()-timerStart)/1000)); }
+function updateTimerDisplay(s){ const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60; document.getElementById('timer-display').textContent=String(h).padStart(2,'0')+':'+String(m).padStart(2,'0')+':'+String(sec).padStart(2,'0'); }
+function timerStart_(){ timerStart=Date.now();timerInterval=setInterval(timerTick,1000);timerState='running';renderTimer(); }
+function timerPause(){ clearInterval(timerInterval);timerElapsed+=Math.floor((Date.now()-timerStart)/1000);timerStart=null;timerState='paused';renderTimer(); }
+function timerResume(){ timerStart=Date.now();timerInterval=setInterval(timerTick,1000);timerState='running';renderTimer(); }
+function timerStop(){ clearInterval(timerInterval);timerElapsed=0;timerStart=null;timerState='stopped';updateTimerDisplay(0);renderTimer(); }
+function renderTimer(){
+  const wrap=document.getElementById('timer-wrap'),ctrl=document.getElementById('timer-controls'),st=document.getElementById('timer-status');
+  wrap.className='timer '+timerState;
+  if(timerState==='stopped'){
+    ctrl.innerHTML=`<button class="btn-t btn-t-start" onclick="timerStart_()">▶ Start</button>`;
+    st.textContent='Stopped';
+  } else if(timerState==='running'){
+    ctrl.innerHTML=`<button class="btn-t btn-t-pause" onclick="timerPause()">⏸ Pause</button><button class="btn-t btn-t-stop" onclick="timerStop()">■ Stop</button>`;
+    st.textContent='Running';
+  } else {
+    ctrl.innerHTML=`<button class="btn-t btn-t-start" onclick="timerResume()">▶ Resume</button><button class="btn-t btn-t-stop" onclick="timerStop()">■ Reset</button>`;
+    st.textContent='Paused';
+  }
+}
+
+function renderAll(){ renderKeyBosses(); renderActBosses(); renderKeys(); renderRunes(); renderGGFinds(); }
+renderTimer();
+renderAll();
+
+// Section collapse
+function toggleSec(id) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById('arr-' + id);
+  if (!body) return;
+  const collapsed = body.classList.toggle('collapsed');
+  if (arrow) arrow.style.transform = collapsed ? 'rotate(-90deg)' : '';
+  // persist
+  const hidden = JSON.parse(localStorage.getItem('d2r_hidden') || '{}');
+  hidden[id] = collapsed;
+  localStorage.setItem('d2r_hidden', JSON.stringify(hidden));
+}
+function restoreCollapsed() {
+  const hidden = JSON.parse(localStorage.getItem('d2r_hidden') || '{}');
+  Object.entries(hidden).forEach(([id, col]) => {
+    if (!col) return;
+    const body = document.getElementById(id);
+    const arrow = document.getElementById('arr-' + id);
+    if (body) body.classList.add('collapsed');
+    if (arrow) arrow.style.transform = 'rotate(-90deg)';
+  });
+}
+restoreCollapsed();
+
+
+// Export / Import
+function exportData() {
+  const payload = { version:1, exported:new Date().toISOString(), state:state };
+  const json = JSON.stringify(payload, null, 2);
+  document.getElementById('export-text').value = json;
+  const modal = document.getElementById('export-modal');
+  modal.style.display = 'flex';
+}
+function copyExport() {
+  const ta = document.getElementById('export-text');
+  ta.select();
+  ta.setSelectionRange(0, 99999);
+  try {
+    navigator.clipboard.writeText(ta.value).then(() => showCopyMsg()).catch(() => { document.execCommand('copy'); showCopyMsg(); });
+  } catch(e) { document.execCommand('copy'); showCopyMsg(); }
+}
+function showCopyMsg() {
+  const m = document.getElementById('copy-msg');
+  m.textContent = '✓ Copied to clipboard';
+  setTimeout(() => { m.textContent = ''; }, 2500);
+}
+
+function openImportModal() {
+  document.getElementById('import-text').value = '';
+  document.getElementById('import-msg').textContent = '';
+  document.getElementById('import-modal').style.display = 'flex';
+}
+function importFromText() {
+  const txt = document.getElementById('import-text').value.trim();
+  const msg = document.getElementById('import-msg');
+  if (!txt) { msg.style.color='#c06060'; msg.textContent='Nothing to import — paste your JSON first.'; return; }
+  try {
+    const payload = JSON.parse(txt);
+    const imported = payload.state || payload;
+    if (!imported.keyBosses && !imported.runes) {
+      msg.style.color='#c06060'; msg.textContent='Invalid data — does not look like a D2R Tally export.'; return;
+    }
+    if (imported.keyBosses) state.keyBosses = imported.keyBosses;
+    if (imported.actBosses) state.actBosses = imported.actBosses;
+    if (imported.keys)      state.keys      = imported.keys;
+    if (imported.runes)     state.runes     = imported.runes;
+    if (imported.ggFinds)   state.ggFinds   = imported.ggFinds;
+    saveState(); renderAll();
+    msg.style.color='#70a850'; msg.textContent='✓ Import successful';
+    setTimeout(() => { document.getElementById('import-modal').style.display='none'; }, 1200);
+  } catch(err) {
+    msg.style.color='#c06060'; msg.textContent='Failed to parse JSON: ' + err.message;
+  }
+}
+
+</script>
+</body>
+</html>
