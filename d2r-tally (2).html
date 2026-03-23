@@ -373,23 +373,27 @@
     <button class="btn-rst btn-export" onclick="exportData()">⬇ Export</button>
     <div id="export-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;padding:20px;">
       <div style="background:#16120a;border:1px solid #3a2e14;border-radius:6px;padding:16px;max-width:600px;width:100%;display:flex;flex-direction:column;gap:10px;">
-        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#c8a85a;">EXPORT DATA — Copy the text below</div>
-        <textarea id="export-text" style="background:#0a0804;border:1px solid #3a2e14;border-radius:4px;color:#d4c49a;font-family:monospace;font-size:11px;padding:10px;height:260px;resize:none;outline:none;" readonly></textarea>
-        <div style="display:flex;gap:8px;">
-          <button class="btn-rst btn-export" onclick="copyExport()" style="flex:1;">⧉ Copy to Clipboard</button>
-          <button class="btn-rst" onclick="document.getElementById('export-modal').style.display='none'" style="flex:1;">✕ Close</button>
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#c8a85a;">EXPORT DATA</div>
+        <textarea id="export-text" style="background:#0a0804;border:1px solid #3a2e14;border-radius:4px;color:#d4c49a;font-family:monospace;font-size:11px;padding:10px;height:220px;resize:none;outline:none;" readonly></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn-rst btn-export" onclick="copyExport()">⧉ Copy to Clipboard</button>
+          <button class="btn-rst btn-export" onclick="saveExportFile()">⬇ Save to File</button>
+          <button class="btn-rst" onclick="document.getElementById('export-modal').style.display='none'" style="grid-column:span 2;">✕ Close</button>
         </div>
         <div id="copy-msg" style="font-size:10px;color:#70a850;font-style:italic;text-align:center;min-height:14px;"></div>
       </div>
     </div>
     <button class="btn-rst btn-import" onclick="openImportModal()">⬆ Import</button>
+    <input type="file" id="import-file-input" accept=".json" style="display:none" onchange="importFromFile(event)">
     <div id="import-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center;padding:20px;">
       <div style="background:#16120a;border:1px solid #3a2e14;border-radius:6px;padding:16px;max-width:600px;width:100%;display:flex;flex-direction:column;gap:10px;">
-        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#c8a85a;">IMPORT DATA — Paste exported JSON below</div>
-        <textarea id="import-text" style="background:#0a0804;border:1px solid #3a2e14;border-radius:4px;color:#d4c49a;font-family:monospace;font-size:11px;padding:10px;height:260px;resize:none;outline:none;" placeholder="Paste your exported JSON here..."></textarea>
-        <div style="display:flex;gap:8px;">
-          <button class="btn-rst btn-import" onclick="importFromText()" style="flex:1;">⬆ Load Data</button>
-          <button class="btn-rst" onclick="document.getElementById('import-modal').style.display='none'" style="flex:1;">✕ Close</button>
+        <div style="font-family:'Cinzel',serif;font-size:10px;letter-spacing:2px;color:#c8a85a;">IMPORT DATA</div>
+        <textarea id="import-text" style="background:#0a0804;border:1px solid #3a2e14;border-radius:4px;color:#d4c49a;font-family:monospace;font-size:11px;padding:10px;height:180px;resize:none;outline:none;" placeholder="Paste your exported JSON here..."></textarea>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="btn-rst btn-import" onclick="importFromText()">⧉ Load from Clipboard</button>
+          <button class="btn-rst btn-import" onclick="pasteFromClipboard()">📋 Paste from Clipboard</button>
+          <button class="btn-rst btn-import" onclick="document.getElementById('import-file-input').click()" style="grid-column:span 2;">⬆ Load from File</button>
+          <button class="btn-rst" onclick="document.getElementById('import-modal').style.display='none'" style="grid-column:span 2;">✕ Close</button>
         </div>
         <div id="import-msg" style="font-size:10px;font-style:italic;text-align:center;min-height:14px;"></div>
       </div>
@@ -695,20 +699,28 @@ function exportData() {
   const payload = { version:1, exported:new Date().toISOString(), state:state, sessionStats:sessionStats };
   const json = JSON.stringify(payload, null, 2);
   document.getElementById('export-text').value = json;
-  const modal = document.getElementById('export-modal');
-  modal.style.display = 'flex';
+  document.getElementById('export-modal').style.display = 'flex';
 }
 function copyExport() {
   const ta = document.getElementById('export-text');
-  ta.select();
-  ta.setSelectionRange(0, 99999);
+  ta.select(); ta.setSelectionRange(0,99999);
   try {
-    navigator.clipboard.writeText(ta.value).then(() => showCopyMsg()).catch(() => { document.execCommand('copy'); showCopyMsg(); });
-  } catch(e) { document.execCommand('copy'); showCopyMsg(); }
+    navigator.clipboard.writeText(ta.value).then(()=>showCopyMsg('copy-msg','✓ Copied to clipboard')).catch(()=>{ document.execCommand('copy'); showCopyMsg('copy-msg','✓ Copied to clipboard'); });
+  } catch(e) { document.execCommand('copy'); showCopyMsg('copy-msg','✓ Copied to clipboard'); }
 }
-function showCopyMsg() {
-  const m = document.getElementById('copy-msg');
-  m.textContent = '✓ Copied to clipboard';
+function saveExportFile() {
+  const json = document.getElementById('export-text').value;
+  const date = new Date().toISOString().slice(0,10);
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+  a.download = 'd2r-tally-' + date + '.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  showCopyMsg('copy-msg','✓ File download started');
+}
+function showCopyMsg(id, txt) {
+  const m = document.getElementById(id);
+  if (!m) return;
+  m.style.color='#70a850'; m.textContent = txt;
   setTimeout(() => { m.textContent = ''; }, 2500);
 }
 
@@ -717,25 +729,47 @@ function openImportModal() {
   document.getElementById('import-msg').textContent = '';
   document.getElementById('import-modal').style.display = 'flex';
 }
+function pasteFromClipboard() {
+  const msg = document.getElementById('import-msg');
+  if (navigator.clipboard && navigator.clipboard.readText) {
+    navigator.clipboard.readText().then(txt => {
+      document.getElementById('import-text').value = txt;
+      msg.style.color='#70a850'; msg.textContent='✓ Pasted from clipboard';
+      setTimeout(()=>{ msg.textContent=''; }, 1500);
+    }).catch(()=>{ msg.style.color='#c06060'; msg.textContent='Clipboard access denied — paste manually.'; });
+  } else { msg.style.color='#c06060'; msg.textContent='Clipboard API not available — paste manually (Ctrl+V).'; }
+}
+function importFromFile(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    document.getElementById('import-text').value = ev.target.result;
+    applyImport();
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
 function importFromText() {
+  applyImport();
+}
+function applyImport() {
   const txt = document.getElementById('import-text').value.trim();
   const msg = document.getElementById('import-msg');
-  if (!txt) { msg.style.color='#c06060'; msg.textContent='Nothing to import — paste your JSON first.'; return; }
+  if (!txt) { msg.style.color='#c06060'; msg.textContent='Nothing to import — paste or load a file first.'; return; }
   try {
     const payload = JSON.parse(txt);
     const imported = payload.state || payload;
     if (!imported.keyBosses && !imported.runes) {
       msg.style.color='#c06060'; msg.textContent='Invalid data — does not look like a D2R Tally export.'; return;
     }
-    if (imported.keyBosses) state.keyBosses = imported.keyBosses;
-    if (imported.actBosses) state.actBosses = imported.actBosses;
-    if (imported.keys)      state.keys      = imported.keys;
-    if (imported.runes)     state.runes     = imported.runes;
+    if (imported.keyBosses)    state.keyBosses    = imported.keyBosses;
+    if (imported.actBosses)    state.actBosses    = imported.actBosses;
+    if (imported.keys)         state.keys         = imported.keys;
+    if (imported.runes)        state.runes        = imported.runes;
     if (imported.ggFinds)      state.ggFinds      = imported.ggFinds;
     if (imported.superUniques) state.superUniques = imported.superUniques;
-    // Restore session stats if present
     const ss = payload.sessionStats || imported.sessionStats;
-    if (ss) { sessionStats.count = ss.count||0; sessionStats.totalSecs = ss.totalSecs||0; saveSessionStats(); renderSessionStats(); }
+    if (ss) { sessionStats.count=ss.count||0; sessionStats.totalSecs=ss.totalSecs||0; saveSessionStats(); renderSessionStats(); }
     saveState(); renderAll();
     msg.style.color='#70a850'; msg.textContent='✓ Import successful';
     setTimeout(() => { document.getElementById('import-modal').style.display='none'; }, 1200);
